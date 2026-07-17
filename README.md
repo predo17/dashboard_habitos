@@ -1,223 +1,308 @@
-# Implementação do Formulário de Cadastro de Hábitos
+# Melhorias no Cadastro e Gerenciamento de Hábitos
 
 ## Objetivo
 
-Nesta etapa do projeto foi desenvolvido o formulário responsável por cadastrar novos hábitos na aplicação.
+Nesta etapa do projeto foram implementadas melhorias voltadas para:
 
-Além de permitir o cadastro, foram adicionadas validações para evitar dados inválidos e criado um estilo responsivo utilizando SCSS.
+* experiência do usuário;
+* validação dos dados cadastrados;
+* comunicação entre componentes;
+* organização da interface.
 
----
-
-# Estrutura do componente
-
-O componente `AddHabit` é responsável por:
-
-* Capturar o nome do hábito;
-* Permitir selecionar uma categoria;
-* Validar os dados informados;
-* Adicionar um novo hábito ao estado global utilizando a Context API.
-
-Para acessar a função responsável por adicionar um hábito foi utilizado o hook personalizado `useHabit`.
-
-```tsx
-const { addHabit } = useHabit();
-```
-
-Dessa forma o componente não precisa conhecer como o estado é armazenado, apenas solicitar a criação de um novo hábito.
+Além disso, foi adicionada a lógica responsável por abrir e fechar o formulário de cadastro de hábitos automaticamente após a criação de um novo hábito.
 
 ---
 
-# Gerenciamento do formulário
+## Comunicação entre componentes
 
-Foram utilizados dois estados locais através do `useState`.
-
-```tsx
-const [name, setName] = useState("");
-const [category, setCategory] = useState("");
-```
-
-Esses estados armazenam temporariamente os valores digitados pelo usuário antes de serem enviados para o contexto.
-
----
-
-# Tratamento do nome do hábito
-
-Foi criada uma função específica para tratar o campo de texto.
+Foi criada a interface `AddHabitProps` para permitir que o componente `AddHabit` receba uma função do componente pai.
 
 ```tsx
-function handleNameChange(...)
-```
-
-Ao atualizar o valor do input foi utilizado o método:
-
-```ts
-trimStart()
-```
-
-O objetivo é impedir que o usuário inicie o nome do hábito com espaços em branco.
-
-Por exemplo:
-
-```
-"   Estudar React"
-```
-
-passa automaticamente para
-
-```
-"Estudar React"
-```
-
-Essa pequena validação melhora a qualidade dos dados armazenados.
-
----
-
-# Cadastro de um novo hábito
-
-Ao enviar o formulário, a função `addNewHabit` é executada.
-
-Antes de criar o hábito são feitas algumas validações.
-
-## Verificação de campos obrigatórios
-
-Caso o usuário deixe algum campo vazio, o cadastro é interrompido.
-
-```tsx
-if (!name || !category) {
-    return alert("Preencha todos os campos");
+interface AddHabitProps {
+  onHabitAdded: () => void;
 }
 ```
 
-Isso evita que hábitos incompletos sejam adicionados.
-
----
-
-## Criação do objeto
-
-Quando a validação é concluída, um novo objeto é enviado para o contexto.
+O componente passou a receber essa propriedade da seguinte maneira:
 
 ```tsx
-addHabit({
-    id: Date.now(),
-    name,
-    category,
-    check: false,
-    streak: 0
-});
+export default function AddHabit({ onHabitAdded }: AddHabitProps)
 ```
 
-Foi utilizado `Date.now()` para gerar um identificador único durante o desenvolvimento.
+### Por que isso foi feito?
 
-Os demais campos são inicializados com seus respectivos valores padrão.
+O componente `AddHabit` é responsável apenas pelo cadastro dos hábitos. Entretanto, quem controla a exibição do formulário é o componente pai (`Habits`).
 
-Após o cadastro, os campos do formulário são limpos para facilitar o registro de um novo hábito.
-
----
-
-# Categorias
-
-As categorias disponíveis foram armazenadas em uma constante.
-
-```tsx
-const CATEGORY_OPTIONS = [
-    "Saúde",
-    "Estudo",
-    "Exercicio",
-    "Outro"
-];
-```
+Ao utilizar uma função passada por props, o componente filho consegue avisar ao componente pai que um novo hábito foi cadastrado com sucesso.
 
 Essa abordagem possui algumas vantagens:
 
-* evita repetição de código;
-* facilita adicionar ou remover categorias;
-* permite gerar automaticamente os elementos `<option>` utilizando `map()`.
+* reduz o acoplamento entre os componentes;
+* mantém a responsabilidade de abrir e fechar o formulário no componente pai;
+* melhora a reutilização do componente.
+
+---
+
+## Fechamento automático do formulário
+
+Após adicionar um novo hábito, a função recebida pelo componente é executada.
 
 ```tsx
-CATEGORY_OPTIONS.map(...)
+onHabitAdded();
 ```
 
-Essa solução deixa o código mais organizado e escalável.
+No componente pai foi criada a função responsável por alterar o estado do formulário.
+
+```tsx
+const toggleForm = () => setIsFormOpen(!isFormOpen);
+```
+
+E ela é passada para o componente:
+
+```tsx
+<AddHabit onHabitAdded={toggleForm} />
+```
+
+### Resultado
+
+Antes:
+
+```txt
+Adicionar hábito
+↓
+Formulário continua aberto
+```
+
+Agora:
+
+```txt
+Adicionar hábito
+↓
+Hábito cadastrado
+↓
+Formulário é fechado automaticamente
+```
+
+Essa pequena melhoria torna a interação mais intuitiva para o usuário.
 
 ---
 
-# Estilização com SCSS
+## Padronização do nome do hábito
 
-A interface foi construída utilizando SCSS.
+Foi realizada uma melhoria na função responsável por tratar o valor digitado no campo de texto.
 
-Ao invés de repetir valores ao longo do arquivo, foram criadas variáveis para representar:
+```tsx
+function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+  const cleaned = e.target.value.trimStart();
+  const capitalized =
+    cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 
-* cores principais;
-* cores de hover;
-* bordas;
-* raio dos elementos;
-* animações;
-* transições.
-
-Exemplo:
-
-```scss
-$primary-color
-$border-color
-$radius
+  setName(capitalized);
+}
 ```
 
-Essa abordagem facilita futuras alterações no tema da aplicação.
+### Por que isso foi feito?
+
+Essa implementação possui dois objetivos:
+
+#### Remover espaços em branco no início do texto
+
+Antes:
+
+```txt
+"     estudar react"
+```
+
+Depois:
+
+```txt
+"estudar react"
+```
 
 ---
 
-# Organização dos estilos
+#### Padronizar a primeira letra
 
-O formulário foi estruturado utilizando Flexbox.
+Antes:
 
-No layout padrão (mobile), os elementos ficam organizados em coluna.
-
-```
-Input
-
-Select
-
-Botão
+```txt
+estudar react
 ```
 
-Em telas maiores é aplicada uma Media Query.
+Depois:
 
-```scss
-@media (min-width: 640px)
+```txt
+Estudar react
 ```
 
-Nesse momento o formulário passa a utilizar uma disposição horizontal.
+Essa abordagem melhora:
 
-```
-Input | Select | Botão
-```
-
-Essa estratégia melhora a experiência do usuário em diferentes tamanhos de tela.
+* a consistência dos dados cadastrados;
+* a apresentação visual dos hábitos;
+* futuras comparações entre os nomes dos hábitos.
 
 ---
 
-# Melhorias de experiência do usuário
+## Validação de hábitos duplicados
 
-Durante a implementação também foram adicionados alguns detalhes para melhorar a usabilidade:
+Foi adicionada uma validação para impedir o cadastro de hábitos repetidos.
 
-* efeito de foco nos campos;
-* animação no botão ao clicar;
-* transições suaves;
-* ícone personalizado no componente `<select>`;
-* cursor apropriado para seleção;
-* limpeza automática do formulário após o cadastro.
+```tsx
+habits.some(
+  (hb) =>
+    hb.name === name &&
+    hb.category === category
+)
+```
+
+Caso o hábito já exista, a aplicação exibe a seguinte mensagem:
+
+```txt
+Hábito já cadastrado.
+```
+
+### Por que isso foi feito?
+
+Sem essa validação, seria possível cadastrar várias vezes o mesmo hábito. A validação evita registros desnecessários e mantém a lista de hábitos mais organizada.
 
 ---
 
-# Aprendizados
+## Componente Habits
 
-Com essa implementação foram praticados diversos conceitos importantes do desenvolvimento Front-end, entre eles:
+O componente `Habits` passou a ser responsável pelo gerenciamento da interface do Dashboard.
 
-* gerenciamento de formulários com React;
-* utilização de estados locais;
-* consumo de dados através da Context API;
-* criação de validações simples;
-* renderização dinâmica utilizando `map()`;
-* componentização;
-* organização de estilos com SCSS;
-* criação de layouts responsivos utilizando Flexbox e Media Queries.
+Ele possui as seguintes responsabilidades:
+
+* abrir e fechar o formulário de cadastro;
+* listar todos os hábitos cadastrados;
+* marcar hábitos como concluídos;
+* remover hábitos;
+* exibir mensagens quando não houver hábitos cadastrados.
+
+---
+
+## Controle do formulário
+
+Foi criado um estado responsável por controlar a exibição do componente de cadastro.
+
+```tsx
+const [isFormOpen, setIsFormOpen] =
+  useState(false);
+```
+
+Quando o usuário clicar no botão:
+
+```txt
++ Novo Hábito
+```
+
+o formulário será exibido.
+
+---
+
+## Renderização condicional
+
+O formulário é renderizado apenas quando necessário.
+
+```tsx
+{
+  isFormOpen &&
+  <AddHabit onHabitAdded={toggleForm} />
+}
+```
+
+### Por que isso foi feito?
+
+Essa abordagem permite:
+
+* reduzir elementos desnecessários na tela;
+* melhorar a organização visual da aplicação;
+* deixar a interface mais limpa.
+
+---
+
+## Lista de hábitos
+
+Foi implementada a renderização dinâmica dos hábitos utilizando o método `map()`.
+
+```tsx
+habits.map(...)
+```
+
+Cada item da lista apresenta:
+
+* nome do hábito;
+* categoria;
+* sequência de dias;
+* status de conclusão;
+* botão para exclusão.
+
+---
+
+## Marcar hábitos como concluídos
+
+Cada hábito possui um botão responsável por alterar seu estado de conclusão.
+
+```tsx
+onClick={() => toggleHabit(habit.id)}
+```
+
+Quando marcado como concluído:
+
+* sua aparência é alterada visualmente;
+* o botão de exclusão é habilitado.
+
+---
+
+## Exclusão de hábitos
+
+O botão de exclusão somente é exibido quando o hábito estiver concluído.
+
+```tsx
+habit.check === true
+```
+
+### Por que isso foi feito?
+
+Essa decisão foi tomada para:
+
+* evitar exclusões acidentais;
+* incentivar o usuário a concluir o hábito antes de removê-lo;
+* melhorar a experiência de uso da aplicação.
+
+---
+
+## Estado vazio
+
+Quando nenhum hábito estiver cadastrado, uma mensagem amigável é exibida para o usuário.
+
+```txt
+Você ainda não tem hábitos cadastrados.
+Adicione um acima!
+```
+
+Essa abordagem melhora a usabilidade e deixa mais claro qual ação deve ser realizada.
+
+---
+
+## Conceitos praticados
+
+Durante essa implementação foram praticados conceitos importantes do desenvolvimento Front-end:
+
+* Comunicação entre componentes utilizando Props.
+* Gerenciamento de estado com React Hooks.
+* Validação de formulários.
+* Manipulação de Strings.
+* Renderização condicional.
+* Listagem dinâmica com map().
+* Boas práticas de componentização.
+* Context API.
+* Experiência do usuário (UX).
+* Organização da interface.
+* Tipagem com TypeScript.
+
+---
+
+## Aprendizados
+
+Essas melhorias permitiram deixar o componente de cadastro mais robusto e a interface mais intuitiva. Além disso, foi possível praticar a comunicação entre componentes no React, aplicar validações importantes para o formulário e organizar melhor as responsabilidades de cada componente da aplicação.

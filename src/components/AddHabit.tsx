@@ -1,16 +1,21 @@
 import { useHabit } from "@/context/useHabits";
 import { useState } from "react";
 
+interface AddHabitProps {
+  onHabitAdded: () => void;
+}
+
 const CATEGORY_OPTIONS = ["Saúde", "Estudo", "Exercicio", "Outro"];
 
-export default function AddHabit() {
-  const { addHabit } = useHabit();
+export default function AddHabit({ onHabitAdded }: AddHabitProps) {
+  const { habits, addHabit } = useHabit();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
 
   function handleNameChange(e: React.ChangeEvent<HTMLInputElement>) {
     const cleaned = e.target.value.trimStart();
-    setName(cleaned);
+    const capitalized = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    setName(capitalized);
   }
 
   function addNewHabit(e: React.FormEvent<HTMLFormElement>) {
@@ -18,10 +23,15 @@ export default function AddHabit() {
 
     if (!name || !category) {
       return alert("Preencha todos os campos");
+    } else if (
+      habits.some((hb) => hb.name === name && hb.category === category)
+    ) {
+      return alert("Hábito ja cadastrado");
     }
     addHabit({ id: Date.now(), name, category, check: false, streak: 0 });
     setName("");
     setCategory("");
+    onHabitAdded();
   }
 
   return (

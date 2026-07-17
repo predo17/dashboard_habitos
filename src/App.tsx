@@ -1,10 +1,10 @@
 import { HabitProvider } from "@/context/HabitContext";
-import AddHabit from "./components/AddHabit";
+import HabitsPage from "@/page/HabitsPage";
 
 export function LayoutApp() {
   return (
     <>
-      <AddHabit />
+      <HabitsPage />
     </>
   );
 }
