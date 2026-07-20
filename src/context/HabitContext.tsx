@@ -1,9 +1,16 @@
 import { HabitContext } from "@/context/useHabits";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Habit } from "@/types/HabitTypes";
 
 export function HabitProvider({ children }: { children: React.ReactNode }) {
-  const [habit, setHabit] = useState<Habit[]>([]);
+  const [habit, setHabit] = useState<Habit[]>(() => {
+    const storedHabits = localStorage.getItem("habits");
+    return storedHabits ? JSON.parse(storedHabits) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("habits", JSON.stringify(habit));
+  }, [habit]);
 
   function addHabit(hb: Habit) {
     setHabit((prevHabits) => [...prevHabits, hb]);
