@@ -1,100 +1,320 @@
-# Implementação da Persistência de Dados com LocalStorage
+# Implementação do Sistema de Streak (Sequência de Hábitos)
 
 ## Objetivo
 
-Nesta etapa do projeto foi implementada a persistência dos hábitos cadastrados utilizando o LocalStorage API do navegador.
+Nesta etapa do projeto foi implementado o sistema de sequência de hábitos (streak), permitindo que a aplicação acompanhe em quais dias um hábito foi concluído e mantenha a contagem de dias consecutivos em que o usuário realizou determinada atividade.
 
-Anteriormente, todos os hábitos eram armazenados apenas no estado da aplicação utilizando o `useState`. Fazendo com que, ao atualizar a página ou fechar o navegador, todas as informações eram perdidas.
+Além disso, foi adicionada a lógica responsável por:
 
-Com a implementação da persistência, os hábitos passam a ser armazenados localmente no navegador do usuário, permitindo que os dados continuem disponíveis mesmo após recarregar a aplicação.
+* Persistir a sequência dos hábitos no Local Storage.
+* Reiniciar automaticamente a sequência quando o usuário quebrar a consistência do hábito.
+* Desmarcar automaticamente os hábitos no início de um novo dia.
+* Impedir inconsistências na contagem dos dias concluídos.
 
 ---
 
-## Como era antes
+## Atualização da Interface Habit
 
-Inicialmente, o estado era criado da seguinte forma:
+Para suportar a nova funcionalidade, foi adicionada uma nova propriedade à interface `Habit`.
 
-```tsx
-const [habit, setHabit] = useState<Habit[]>([]);
+```ts
+export interface Habit {
+  id: number;
+  name: string;
+  category: string;
+  check: boolean;
+  streak: number;
+  lastCompleted: string | null;
+}
 ```
 
-Nessa abordagem:
+### Por que isso foi feito?
 
-* Os hábitos existiam apenas durante a execução da aplicação.
-* Atualizar a página fazia com que todos os dados fossem perdidos.
-* O usuário precisava cadastrar novamente todos os hábitos.
+Anteriormente, a aplicação armazenava apenas:
+
+* nome do hábito;
+* categoria;
+* status de conclusão;
+* sequência atual.
+
+Porém, não existia nenhuma informação indicando em qual dia o hábito havia sido concluído.
+
+A propriedade `lastCompleted` foi criada justamente para armazenar a última data em que o hábito foi marcado como concluído.
 
 Exemplo:
 
 ```txt
-Adicionar hábito
-↓
+25/05/2026 -> Estudar React
 
-Atualizar a página
-↓
-
-Todos os hábitos desaparecem
+lastCompleted = "2026-05-25"
 ```
+
+Essa informação é fundamental para saber se:
+
+* o usuário completou o hábito hoje;
+* completou ontem;
+* perdeu um ou mais dias;
+* deve receber um incremento no streak;
+* deve perder a sequência.
 
 ---
 
-## Carregando os dados salvos
+## Atualização do Cadastro de Hábitos
 
-Para resolver esse problema, foi utilizada a inicialização (Lazy Initialization) do `useState`.
+A função responsável por criar um novo hábito também foi atualizada.
 
-```tsx
-const [habit, setHabit] = useState<Habit[]>(() => {
-  const storedHabits = localStorage.getItem("habits");
+Antes:
 
-  return storedHabits
-    ? JSON.parse(storedHabits)
-    : [];
+```ts
+addHabit({
+  id,
+  name,
+  category,
+  check,
+  streak
+});
+```
+
+Agora:
+
+```ts
+addHabit({
+  id: Date.now(),
+  name,
+  category,
+  check: false,
+  streak: 0,
+  lastCompleted: null
 });
 ```
 
 ### Por que isso foi feito?
 
-Ao utilizar uma função dentro do `useState`, o React executa essa lógica apenas na primeira renderização do componente.
+Quando um hábito é criado pela primeira vez:
 
-O objetivo dessa abordagem é:
+* ele ainda não foi concluído;
+* não possui sequência;
+* não possui uma data de conclusão.
 
-* verificar se existem hábitos salvos no navegador;
-* converter os dados armazenados em formato JSON para um array JavaScript;
-* utilizar os dados existentes como estado inicial da aplicação.
-
-Caso não exista nenhuma informação armazenada, um array vazio será retornado.
+Por esse motivo, o valor inicial da propriedade `lastCompleted` é definido como `null`.
 
 ---
 
-## Utilizando o LocalStorage
+## Processamento dos hábitos ao iniciar a aplicação
 
-Foi utilizado o método:
+Uma das principais melhorias dessa implementação foi a utilização do `useState` com Lazy Initialization.
 
-```tsx
-localStorage.getItem("habits");
+```ts
+useState<Habit[]>(() => {
+   ...
+})
 ```
 
-Esse método é responsável por buscar os dados armazenados utilizando a chave:
+Ao iniciar a aplicação, todos os hábitos armazenados no LocalStorage são processados automaticamente.
+
+O sistema verifica:
+
+* se o hábito foi concluído hoje;
+* se foi concluído ontem;
+* se a sequência ainda está válida;
+* se o hábito deve continuar marcado como concluído.
+
+---
+
+## Tratamento das datas
+
+Para realizar essas verificações foram criadas duas datas de referência:
+
+```ts
+const todayStr = ...
+const yesterdayStr = ...
+```
+
+### Por que utilizar duas datas?
+
+O sistema de streak precisa considerar três cenários:
+
+### Cenário 1 - Hábito concluído hoje
 
 ```txt
-habits
+Hoje: 26/05
+
+lastCompleted = 26/05
 ```
 
-Como o LocalStorage armazena apenas strings, foi necessário utilizar:
+Resultado:
 
-```tsx
-JSON.parse()
+```txt
+check = true
+streak permanece igual
 ```
-
-para transformar os dados novamente em um array de objetos.
 
 ---
 
-## Salvando automaticamente os hábitos
+### Cenário 2 - Hábito concluído ontem
 
-Além de carregar os dados, foi implementado um efeito responsável por salvar automaticamente qualquer alteração realizada no estado.
+```txt
+Hoje: 26/05
 
-```tsx
+lastCompleted = 25/05
+```
+
+Resultado:
+
+```txt
+check = false
+streak permanece ativo
+```
+
+Nesse caso, o usuário ainda não perdeu sua sequência. Basta concluir o hábito novamente para incrementá-la.
+
+---
+
+### Cenário 3 - Sequência quebrada
+
+```txt
+Hoje: 26/05
+
+lastCompleted = 23/05
+```
+
+Resultado:
+
+```txt
+check = false
+streak = 0
+lastCompleted = null
+```
+
+Como o hábito ficou mais de um dia sem ser concluído, a sequência é perdida automaticamente.
+
+---
+
+## Reinicialização automática do checkbox
+
+Outra melhoria implementada foi o comportamento do checkbox do hábito.
+
+Antes:
+
+```txt
+Marcou hoje
+
+↓
+
+Atualizou a página amanhã
+
+↓
+
+O hábito continuava marcado
+```
+
+Agora:
+
+```txt
+Marcou hoje
+
+↓
+
+Abriu a aplicação no dia seguinte
+
+↓
+
+O hábito é automaticamente desmarcado
+```
+
+### Por que isso foi feito?
+
+Cada hábito representa uma tarefa diária.
+
+Se ele permanecer marcado permanentemente, não faz sentido para o acompanhamento da rotina do usuário.
+
+A lógica atual garante que:
+
+* o hábito seja concluído apenas uma vez por dia;
+* esteja disponível novamente no dia seguinte.
+
+---
+
+## Atualização do Streak
+
+A função `toggleHabit` foi completamente atualizada para suportar a nova regra de negócio.
+
+Ao marcar um hábito como concluído, o sistema verifica:
+
+### Se já foi concluído hoje
+
+```txt
+Não incrementa o streak.
+```
+
+---
+
+### Se foi concluído ontem
+
+```txt
+Incrementa o streak.
+
+2 dias -> 3 dias
+```
+
+---
+
+### Se a sequência foi quebrada
+
+```txt
+Inicia uma nova sequência.
+
+0 dias -> 1 dia
+```
+
+---
+
+## Desmarcando um hábito
+
+Também foi implementada uma regra para o caso do usuário desmarcar um hábito no mesmo dia.
+
+Antes:
+
+```txt
+Estudar React
+
+Streak: 3 dias
+```
+
+Após desmarcar:
+
+```txt
+Streak: 2 dias
+```
+
+Caso o hábito possua apenas um dia de sequência:
+
+```txt
+Streak: 1 dia
+
+↓
+
+Desmarcou
+
+↓
+
+Streak: 0
+lastCompleted = null
+```
+
+### Por que isso foi feito?
+
+Essa abordagem evita inconsistências nos dados.
+
+Se o usuário marcou um hábito por engano, ele pode desfazer a ação sem precisar aguardar até o próximo dia.
+
+---
+
+## Persistência dos dados
+
+A sincronização com o LocalStorage continua sendo realizada automaticamente através do `useEffect`.
+
+```ts
 useEffect(() => {
   localStorage.setItem(
     "habits",
@@ -103,65 +323,34 @@ useEffect(() => {
 }, [habit]);
 ```
 
-### Por que isso foi feito?
+Sempre que houver alguma alteração:
 
-Sempre que a lista de hábitos for alterada, o React executará o `useEffect`.
+* adicionar hábito;
+* remover hábito;
+* concluir hábito;
+* desmarcar hábito;
+* atualizar streak;
 
-Isso significa que as seguintes ações serão salvas automaticamente:
-
-* adicionar um hábito;
-* remover um hábito;
-* marcar um hábito como concluído;
-* desmarcar um hábito.
-
-Não é necessário chamar o LocalStorage manualmente dentro de cada função.
+os dados serão salvos automaticamente.
 
 ---
 
-## Vantagens dessa abordagem
-
-Ao utilizar o `useEffect`, foi possível centralizar toda a lógica de persistência dos dados em um único lugar.
-
-Em vez de fazer algo como:
-
-```tsx
-addHabit()
-
-↓
-
-localStorage.setItem(...)
-```
-
-em todas as funções responsáveis por modificar o estado, basta atualizar o estado normalmente.
-
-O React fica responsável por observar qualquer alteração no array de hábitos e salvar automaticamente as mudanças.
-
-Essa abordagem oferece algumas vantagens:
-
-* código mais limpo;
-* menor repetição de lógica;
-* melhor manutenção;
-* maior escalabilidade.
-
----
-
-## Fluxo da aplicação
-
-O funcionamento atual do componente pode ser resumido da seguinte maneira:
+## Fluxo atual da aplicação
 
 ```txt
 Aplicação inicia
-↓
-
-Verifica se existem hábitos salvos
 
 ↓
 
-Sim -> Carrega os hábitos
+Carrega os hábitos salvos
 
 ↓
 
-Não -> Cria um array vazio
+Verifica as datas de conclusão
+
+↓
+
+Atualiza o estado dos hábitos
 
 ↓
 
@@ -169,30 +358,38 @@ Usuário interage com a aplicação
 
 ↓
 
-O estado é atualizado
+O streak é calculado
 
 ↓
 
-O useEffect salva automaticamente as alterações no LocalStorage
+Os dados são atualizados
+
+↓
+
+As alterações são salvas no LocalStorage
 ```
 
 ---
 
 ## Conceitos praticados
 
-Durante essa implementação foram praticados conceitos importantes do React e do JavaScript:
+Durante essa implementação foram praticados diversos conceitos importantes do desenvolvimento Front-end:
 
+* React Hooks (useState e useEffect);
 * LocalStorage API;
-* Persistência de dados no navegador;
-* React Hooks;
-* useState com Lazy Initialization;
-* useEffect;
-* Manipulação de JSON;
+* Manipulação de datas em JavaScript;
 * Gerenciamento de estado global;
+* Persistência de dados;
+* Regras de negócio para streaks;
+* Imutabilidade de estados;
+* Tipagem com TypeScript;
+* Lazy Initialization do useState;
 * Boas práticas na organização do código.
 
 ---
 
 ## Aprendizados
 
-A implementação da persistência de dados foi um passo importante para tornar a aplicação mais próxima de um produto real. Além de melhorar significativamente a experiência do usuário, essa abordagem permitiu praticar conceitos amplamente utilizados em aplicações Front-end, como sincronização entre estado e armazenamento local, utilização do `useEffect` para efeitos colaterais e carregamento inicial de dados utilizando o `useState`.
+A implementação do sistema de streak tornou a aplicação significativamente mais próxima de um produto real. Além da persistência dos dados, foi necessário pensar em regras de negócio relacionadas ao tempo, consistência das informações e experiência do usuário.
+
+Essa funcionalidade permitiu praticar conceitos bastante utilizados no mercado, como sincronização de estado com armazenamento local, manipulação de datas e modelagem de comportamentos complexos dentro de uma aplicação React.

@@ -4,4 +4,5 @@ export interface Habit {
   category: string;
   check: boolean;
   streak: number;
+  lastCompleted: string | null;
 }

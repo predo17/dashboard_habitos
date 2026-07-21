@@ -28,7 +28,7 @@ export default function AddHabit({ onHabitAdded }: AddHabitProps) {
     ) {
       return alert("Hábito ja cadastrado");
     }
-    addHabit({ id: Date.now(), name, category, check: false, streak: 0 });
+    addHabit({ id: Date.now(), name, category, check: false, streak: 0, lastCompleted: null });
     setName("");
     setCategory("");
     onHabitAdded();
